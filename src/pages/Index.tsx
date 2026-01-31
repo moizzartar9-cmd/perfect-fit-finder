@@ -1,93 +1,115 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CategoryToggle } from "@/components/CategoryToggle";
 import { CalibrationModal } from "@/components/CalibrationModal";
 import { BrandLogoCloud } from "@/components/BrandLogoCloud";
-import { FitResultCard, FitResult } from "@/components/FitResultCard";
-import { Sparkles, ArrowRight, Footprints, Shirt, ShoppingBag, CheckCircle2 } from "lucide-react";
+import { BrandResultsGrid } from "@/components/BrandResultsGrid";
+import { Sparkles, ArrowRight, Footprints, Shirt, ShoppingBag, CheckCircle2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { 
+  getRecommendationsForAllBrands, 
+  type SizeRecommendation,
+  type CalibrationData,
+  type Category,
+  type ProductType,
+  type FitPreference
+} from "@/lib/sizeMappingEngine";
 
-type Category = "men" | "women" | "kids";
-type ProductType = "footwear" | "apparel";
+// Isolated state for each product type
+interface ProductState {
+  uid: string;
+  calibration: CalibrationData | null;
+  recommendations: SizeRecommendation[];
+  isCalibrated: boolean;
+}
+
+const initialProductState: ProductState = {
+  uid: "",
+  calibration: null,
+  recommendations: [],
+  isCalibrated: false,
+};
 
 const Index = () => {
   const [category, setCategory] = useState<Category>("men");
-  const [uid, setUid] = useState("");
   const [productType, setProductType] = useState<ProductType>("footwear");
   const [calibrationOpen, setCalibrationOpen] = useState(false);
-  const [fitResult, setFitResult] = useState<FitResult | null>(null);
+  
+  // ISOLATED STATE: Separate state for footwear and apparel
+  const [footwearState, setFootwearState] = useState<ProductState>(initialProductState);
+  const [apparelState, setApparelState] = useState<ProductState>(initialProductState);
+  
+  // Get current state based on product type
+  const currentState = productType === "footwear" ? footwearState : apparelState;
+  const setCurrentState = productType === "footwear" ? setFootwearState : setApparelState;
 
-  const handleCalibrationComplete = (data: { method: string; size: string; confidence: number }) => {
+  // Handle product type switch - NO data leakage between types
+  const handleProductTypeChange = useCallback((newType: ProductType) => {
+    setProductType(newType);
+    // State is already isolated - no reset needed, each type keeps its own data
+  }, []);
+
+  // Handle category change - reset both states to prevent stale data
+  const handleCategoryChange = useCallback((newCategory: Category) => {
+    setCategory(newCategory);
+    // Reset both product type states when category changes
+    setFootwearState(initialProductState);
+    setApparelState(initialProductState);
+  }, []);
+
+  const handleCalibrationComplete = useCallback((data: { method: string; size: string; confidence: number }) => {
     // Generate a simulated UID
     const generatedUid = `USID-${category.toUpperCase().slice(0, 1)}${productType.slice(0, 1).toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    setUid(generatedUid);
-
-    // Set fit result
-    setFitResult({
-      uid: generatedUid,
+    
+    // Create calibration data
+    const calibration: CalibrationData = {
+      category,
       productType,
-      recommendedSize: data.size,
-      confidence: data.confidence,
-      insights: productType === "footwear"
-        ? [
-            "Runs narrow; consider +0.5 size for wide feet",
-            "True to size for regular width",
-            "Break-in period: 2-3 wears recommended",
-          ]
-        : [
-            "Relaxed fit; size down for slim preference",
-            "True to size for regular fit",
-            "Fabric has 2% stretch allowance",
-          ],
-      brandAdjustments: productType === "footwear"
-        ? [
-            { brand: "Nike", adjustment: "Size 9.5" },
-            { brand: "Adidas", adjustment: "Size 9" },
-            { brand: "Puma", adjustment: "Size 9.5" },
-            { brand: "New Balance", adjustment: "Size 9 (Wide)" },
-          ]
-        : [
-            { brand: "H&M", adjustment: "L" },
-            { brand: "Zara", adjustment: "M" },
-            { brand: "Uniqlo", adjustment: "L" },
-            { brand: "Levi's", adjustment: "M (32)" },
-          ],
-    });
-  };
-
-  const handleLookup = () => {
-    if (uid.startsWith("USID-")) {
-      // Simulate looking up an existing UID
-      const isFootwear = uid.includes("-F");
-      setProductType(isFootwear ? "footwear" : "apparel");
-      setFitResult({
-        uid,
-        productType: isFootwear ? "footwear" : "apparel",
-        recommendedSize: isFootwear ? "UK 9 / EU 43" : "M (40)",
-        confidence: 94,
-        insights: isFootwear
-          ? [
-              "Runs narrow; consider +0.5 size for wide feet",
-              "True to size for regular width",
-            ]
-          : [
-              "Relaxed fit; size down for slim preference",
-              "True to size for regular fit",
-            ],
-        brandAdjustments: isFootwear
-          ? [
-              { brand: "Nike", adjustment: "Size 9.5" },
-              { brand: "Adidas", adjustment: "Size 9" },
-            ]
-          : [
-              { brand: "H&M", adjustment: "L" },
-              { brand: "Zara", adjustment: "M" },
-            ],
-      });
+      baseSize: data.size,
+      fitPreference: "regular" as FitPreference,
+    };
+    
+    // Get recommendations for all brands
+    const recommendations = getRecommendationsForAllBrands(calibration);
+    
+    // Update the correct state based on product type
+    const newState: ProductState = {
+      uid: generatedUid,
+      calibration,
+      recommendations,
+      isCalibrated: true,
+    };
+    
+    if (productType === "footwear") {
+      setFootwearState(newState);
+    } else {
+      setApparelState(newState);
     }
-  };
+  }, [category, productType]);
+
+  const handleLookup = useCallback(() => {
+    if (currentState.uid.startsWith("USID-")) {
+      // Simulate looking up an existing UID and regenerating recommendations
+      if (currentState.calibration) {
+        const recommendations = getRecommendationsForAllBrands(currentState.calibration);
+        setCurrentState(prev => ({ ...prev, recommendations }));
+      }
+    }
+  }, [currentState, setCurrentState]);
+
+  const handleReset = useCallback(() => {
+    if (productType === "footwear") {
+      setFootwearState(initialProductState);
+    } else {
+      setApparelState(initialProductState);
+    }
+  }, [productType]);
+
+  const handleUidChange = useCallback((value: string) => {
+    setCurrentState(prev => ({ ...prev, uid: value.toUpperCase() }));
+  }, [setCurrentState]);
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -144,7 +166,7 @@ const Index = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="flex justify-center mb-8"
           >
-            <CategoryToggle value={category} onChange={setCategory} />
+            <CategoryToggle value={category} onChange={handleCategoryChange} />
           </motion.div>
 
           {/* Main Action Card */}
@@ -158,7 +180,7 @@ const Index = () => {
               {/* Product Type Toggle */}
               <div className="flex justify-center gap-4 mb-8">
                 <button
-                  onClick={() => setProductType("footwear")}
+                  onClick={() => handleProductTypeChange("footwear")}
                   className={cn(
                     "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
                     productType === "footwear"
@@ -168,9 +190,12 @@ const Index = () => {
                 >
                   <Footprints className="h-5 w-5" />
                   Footwear
+                  {footwearState.isCalibrated && (
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  )}
                 </button>
                 <button
-                  onClick={() => setProductType("apparel")}
+                  onClick={() => handleProductTypeChange("apparel")}
                   className={cn(
                     "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300",
                     productType === "apparel"
@@ -180,155 +205,201 @@ const Index = () => {
                 >
                   <Shirt className="h-5 w-5" />
                   Apparel
+                  {apparelState.isCalibrated && (
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  )}
                 </button>
               </div>
 
-              {/* UID Input */}
+              {/* UID Display or Input */}
               <div className="space-y-4">
-                <div className="relative">
-                  <Input
-                    type="text"
-                    placeholder="Enter your Universal Size ID (e.g., USID-MF-ABC123)"
-                    value={uid}
-                    onChange={(e) => setUid(e.target.value.toUpperCase())}
-                    className="h-14 text-center text-lg bg-muted/30 border-border/50 placeholder:text-muted-foreground/50 focus:border-primary"
-                  />
-                </div>
+                {currentState.isCalibrated ? (
+                  <div className="text-center space-y-3">
+                    <p className="text-sm text-muted-foreground">Your Universal Size ID</p>
+                    <div className={cn(
+                      "text-2xl font-mono font-bold py-3 px-6 rounded-xl inline-block",
+                      productType === "footwear" 
+                        ? "bg-primary/10 text-primary border border-primary/30"
+                        : "bg-secondary/10 text-secondary border border-secondary/30"
+                    )}>
+                      {currentState.uid}
+                    </div>
+                    <div className="flex gap-3 justify-center pt-2">
+                      <Button
+                        onClick={() => setCalibrationOpen(true)}
+                        variant="glass"
+                        size="sm"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Recalibrate
+                      </Button>
+                      <Button
+                        onClick={handleReset}
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        placeholder="Enter your Universal Size ID (e.g., USID-MF-ABC123)"
+                        value={currentState.uid}
+                        onChange={(e) => handleUidChange(e.target.value)}
+                        className="h-14 text-center text-lg bg-muted/30 border-border/50 placeholder:text-muted-foreground/50 focus:border-primary"
+                      />
+                    </div>
 
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button
-                    onClick={handleLookup}
-                    disabled={!uid}
-                    variant={productType === "footwear" ? "hero" : "heroSecondary"}
-                    className="flex-1"
-                  >
-                    <ShoppingBag className="h-5 w-5" />
-                    Look Up My Size
-                  </Button>
-                  <Button
-                    onClick={() => setCalibrationOpen(true)}
-                    variant="glass"
-                    className="flex-1"
-                  >
-                    <Sparkles className="h-5 w-5" />
-                    Get My Universal ID
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button
+                        onClick={handleLookup}
+                        disabled={!currentState.uid}
+                        variant={productType === "footwear" ? "hero" : "heroSecondary"}
+                        className="flex-1"
+                      >
+                        <ShoppingBag className="h-5 w-5" />
+                        Look Up My Size
+                      </Button>
+                      <Button
+                        onClick={() => setCalibrationOpen(true)}
+                        variant="glass"
+                        className="flex-1"
+                      >
+                        <Sparkles className="h-5 w-5" />
+                        Get My Universal ID
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
 
-          {/* Result Card */}
-          {fitResult && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="max-w-2xl mx-auto mt-8"
-            >
-              <FitResultCard
-                result={fitResult}
-                onRecalibrate={() => setCalibrationOpen(true)}
-              />
-            </motion.div>
-          )}
+          {/* Brand Results Grid */}
+          <AnimatePresence mode="wait">
+            {currentState.isCalibrated && currentState.recommendations.length > 0 && (
+              <motion.div
+                key={`${productType}-results`}
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.5 }}
+                className="mt-12"
+              >
+                <BrandResultsGrid 
+                  recommendations={currentState.recommendations}
+                  productType={productType}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
 
-        {/* Trust Section */}
-        <section className="py-12 border-t border-border/30">
-          <div className="container mx-auto px-4">
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="text-center text-sm text-muted-foreground mb-6"
-            >
-              Trusted by leading global and Indian brands
-            </motion.p>
-            <BrandLogoCloud />
-          </div>
-        </section>
-
-        {/* How It Works */}
-        <section className="py-20">
-          <div className="container mx-auto px-4">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-center mb-12"
-            >
-              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-                How It Works
-              </h2>
-              <p className="text-muted-foreground max-w-xl mx-auto">
-                Three simple steps to never guess your size again
-              </p>
-            </motion.div>
-
-            <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-              {[
-                {
-                  step: "01",
-                  title: "Calibrate Once",
-                  description:
-                    "Enter your measurements, chat with our AI, or scan a size label to create your Universal Size ID.",
-                  icon: Sparkles,
-                  color: "primary",
-                },
-                {
-                  step: "02",
-                  title: "Get Your UID",
-                  description:
-                    "Your unique identifier stores your exact fit profile across all brands and categories.",
-                  icon: CheckCircle2,
-                  color: "secondary",
-                },
-                {
-                  step: "03",
-                  title: "Shop Anywhere",
-                  description:
-                    "Use your UID on any platform. Get instant, personalized size recommendations.",
-                  icon: ShoppingBag,
-                  color: "primary",
-                },
-              ].map((item, index) => (
-                <motion.div
-                  key={item.step}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  className="glass-card p-6 lift-hover text-center"
-                >
-                  <div
-                    className={cn(
-                      "inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4",
-                      item.color === "primary"
-                        ? "bg-primary/10 text-primary"
-                        : "bg-secondary/10 text-secondary"
-                    )}
-                  >
-                    <item.icon className="h-6 w-6" />
-                  </div>
-                  <div
-                    className={cn(
-                      "text-xs font-bold mb-2",
-                      item.color === "primary" ? "text-primary" : "text-secondary"
-                    )}
-                  >
-                    STEP {item.step}
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground mb-2">
-                    {item.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{item.description}</p>
-                </motion.div>
-              ))}
+        {/* Trust Section - Only show when not calibrated */}
+        {!currentState.isCalibrated && (
+          <section className="py-12 border-t border-border/30">
+            <div className="container mx-auto px-4">
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="text-center text-sm text-muted-foreground mb-6"
+              >
+                Trusted by leading global and Indian brands
+              </motion.p>
+              <BrandLogoCloud />
             </div>
-          </div>
-        </section>
+          </section>
+        )}
+
+        {/* How It Works - Only show when not calibrated */}
+        {!currentState.isCalibrated && (
+          <section className="py-20">
+            <div className="container mx-auto px-4">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="text-center mb-12"
+              >
+                <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                  How It Works
+                </h2>
+                <p className="text-muted-foreground max-w-xl mx-auto">
+                  Three simple steps to never guess your size again
+                </p>
+              </motion.div>
+
+              <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                {[
+                  {
+                    step: "01",
+                    title: "Calibrate Once",
+                    description:
+                      "Enter your measurements, chat with our AI, or scan a size label to create your Universal Size ID.",
+                    icon: Sparkles,
+                    color: "primary",
+                  },
+                  {
+                    step: "02",
+                    title: "Get Your UID",
+                    description:
+                      "Your unique identifier stores your exact fit profile across all brands and categories.",
+                    icon: CheckCircle2,
+                    color: "secondary",
+                  },
+                  {
+                    step: "03",
+                    title: "Shop Anywhere",
+                    description:
+                      "Use your UID on any platform. Get instant, personalized size recommendations.",
+                    icon: ShoppingBag,
+                    color: "primary",
+                  },
+                ].map((item, index) => (
+                  <motion.div
+                    key={item.step}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: index * 0.1 }}
+                    className="glass-card p-6 lift-hover text-center"
+                  >
+                    <div
+                      className={cn(
+                        "inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4",
+                        item.color === "primary"
+                          ? "bg-primary/10 text-primary"
+                          : "bg-secondary/10 text-secondary"
+                      )}
+                    >
+                      <item.icon className="h-6 w-6" />
+                    </div>
+                    <div
+                      className={cn(
+                        "text-xs font-bold mb-2",
+                        item.color === "primary" ? "text-primary" : "text-secondary"
+                      )}
+                    >
+                      STEP {item.step}
+                    </div>
+                    <h3 className="text-xl font-semibold text-foreground mb-2">
+                      {item.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Stats Section */}
         <section className="py-16 border-t border-border/30">
