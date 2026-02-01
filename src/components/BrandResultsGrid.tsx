@@ -6,46 +6,83 @@ import { ConfidenceMeter } from "./ConfidenceMeter";
 import { cn } from "@/lib/utils";
 import type { SizeRecommendation, ProductType } from "@/lib/sizeMappingEngine";
 
-// Platform icons as simple SVG components
-const PlatformIcon = ({ platform, className }: { platform: string; className?: string }) => {
-  const icons: Record<string, JSX.Element> = {
-    amazon: (
-      <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-        <path d="M.045 18.02c.072-.116.187-.124.348-.022 3.636 2.11 7.594 3.166 11.87 3.166 2.852 0 5.668-.533 8.447-1.595.427-.16.764-.053.904.243.14.296-.02.568-.467.815-2.86 1.278-5.916 1.917-9.167 1.917-4.348 0-8.27-1.073-11.753-3.22-.228-.135-.345-.33-.182-.604zm11.87-5.94c-.802 0-1.582.212-2.342.635-.76.425-1.14.994-1.14 1.71 0 .735.375 1.316 1.125 1.744.61.347 1.35.52 2.22.52 1.33 0 2.39-.344 3.18-1.03.79-.686 1.185-1.526 1.185-2.52 0-.162-.014-.324-.042-.486-.028-.162-.07-.323-.126-.483-.056-.162-.117-.31-.182-.45-.065-.14-.145-.28-.238-.42-.093-.14-.182-.256-.266-.348-.084-.092-.184-.188-.3-.288-.116-.1-.224-.182-.322-.25-.098-.068-.214-.14-.346-.214-.132-.074-.254-.136-.365-.185-.112-.05-.242-.1-.392-.15-.15-.052-.286-.09-.405-.115-.12-.025-.256-.05-.41-.074-.154-.024-.295-.04-.42-.05-.127-.01-.27-.015-.43-.015-1.26 0-2.32.348-3.18 1.045-.86.697-1.29 1.567-1.29 2.61 0 1.074.405 1.938 1.215 2.595.81.657 1.86.986 3.15.986.39 0 .787-.04 1.192-.12.405-.08.802-.19 1.192-.33.39-.14.757-.31 1.102-.51.345-.2.66-.42.945-.66l.075.06c.24.19.36.38.36.57 0 .19-.12.38-.36.57-.24.19-.54.36-.9.51-.36.15-.787.27-1.28.36-.494.09-1.007.135-1.537.135-1.57 0-2.91-.37-4.02-1.11-1.11-.74-1.665-1.67-1.665-2.79 0-1.12.55-2.09 1.65-2.91 1.1-.82 2.45-1.23 4.05-1.23.57 0 1.12.06 1.65.18.53.12.99.27 1.38.45.39.18.75.4 1.08.66.33.26.59.51.78.75.19.24.34.48.45.72.11.24.19.46.24.66.05.2.08.39.09.57.01.18.015.34.015.48 0 1.1-.41 2-1.23 2.7-.82.7-1.91 1.05-3.27 1.05z"/>
-      </svg>
-    ),
-    flipkart: (
-      <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-        <path d="M3.833 1.5c-1.25 0-2.333.98-2.333 2.3v16.4c0 1.32 1.083 2.3 2.333 2.3h16.334c1.25 0 2.333-.98 2.333-2.3V3.8c0-1.32-1.083-2.3-2.333-2.3H3.833zm5.96 4.2h5.084c.39 0 .706.33.706.735 0 .405-.316.735-.706.735h-1.984v10.36c0 .405-.316.735-.706.735-.39 0-.706-.33-.706-.735V7.17H9.793c-.39 0-.706-.33-.706-.735 0-.405.316-.735.706-.735z"/>
-      </svg>
-    ),
-    myntra: (
-      <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-      </svg>
-    ),
-    ajio: (
-      <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-        <circle cx="12" cy="12" r="10"/>
-        <text x="12" y="16" textAnchor="middle" fontSize="10" fill="white" fontWeight="bold">A</text>
-      </svg>
-    ),
-    meesho: (
-      <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-      </svg>
-    ),
-  };
-  return icons[platform] || null;
-};
+interface Platform {
+  id: string;
+  name: string;
+  domain: string;
+  searchUrl: (brand: string, size: string, productType: ProductType) => string;
+}
 
-const platforms = [
-  { id: "amazon", name: "Amazon", color: "hover:text-orange-400" },
-  { id: "flipkart", name: "Flipkart", color: "hover:text-yellow-400" },
-  { id: "myntra", name: "Myntra", color: "hover:text-pink-400" },
-  { id: "ajio", name: "Ajio", color: "hover:text-purple-400" },
-  { id: "meesho", name: "Meesho", color: "hover:text-rose-400" },
+const platforms: Platform[] = [
+  {
+    id: "amazon",
+    name: "Amazon",
+    domain: "amazon.in",
+    searchUrl: (brand, size, productType) => {
+      const query = productType === "footwear"
+        ? `${brand} shoes size ${size}`
+        : `${brand} ${productType} size ${size}`;
+      return `https://www.amazon.in/s?k=${encodeURIComponent(query)}`;
+    }
+  },
+  {
+    id: "flipkart",
+    name: "Flipkart",
+    domain: "flipkart.com",
+    searchUrl: (brand, size, productType) => {
+      const query = productType === "footwear"
+        ? `${brand} shoes size ${size}`
+        : `${brand} ${productType} size ${size}`;
+      return `https://www.flipkart.com/search?q=${encodeURIComponent(query)}`;
+    }
+  },
+  {
+    id: "myntra",
+    name: "Myntra",
+    domain: "myntra.com",
+    searchUrl: (brand, size, productType) => {
+      const query = productType === "footwear"
+        ? `${brand} shoes size ${size}`
+        : `${brand} ${productType} size ${size}`;
+      return `https://www.myntra.com/${encodeURIComponent(brand)}`;
+    }
+  },
+  {
+    id: "ajio",
+    name: "Ajio",
+    domain: "ajio.com",
+    searchUrl: (brand, size, productType) => {
+      const query = productType === "footwear"
+        ? `${brand} shoes size ${size}`
+        : `${brand} ${productType} size ${size}`;
+      return `https://www.ajio.com/search/?text=${encodeURIComponent(query)}`;
+    }
+  },
+  {
+    id: "meesho",
+    name: "Meesho",
+    domain: "meesho.com",
+    searchUrl: (brand, size, productType) => {
+      const query = productType === "footwear"
+        ? `${brand} shoes size ${size}`
+        : `${brand} ${productType} size ${size}`;
+      return `https://www.meesho.com/search?q=${encodeURIComponent(query)}`;
+    }
+  },
 ];
+
+const extractSimpleSize = (sizeString: string): string => {
+  const ukMatch = sizeString.match(/UK\s*(\d+\.?\d*)/i);
+  if (ukMatch) return ukMatch[1];
+
+  const letterMatch = sizeString.match(/\b(XS|S|M|L|XL|XXL|3XL)\b/i);
+  if (letterMatch) return letterMatch[1];
+
+  const numMatch = sizeString.match(/\b(\d+)\b/);
+  if (numMatch) return numMatch[1];
+
+  return sizeString;
+};
 
 interface BrandResultsGridProps {
   recommendations: SizeRecommendation[];
@@ -118,17 +155,15 @@ export function BrandResultsGrid({ recommendations, productType }: BrandResultsG
             {/* Brand Logo */}
             <div className="w-14 h-14 mb-3 flex items-center justify-center rounded-xl bg-white/10 overflow-hidden p-2">
               <img
-                src={`https://img.logo.dev/${rec.brand.domain}?token=pk_VAZ6-EkBTf2ZuWCPxQF8hw`}
+                src={`https://cdn.brandfetch.io/${rec.brand.domain}`}
                 alt={`${rec.brand.name} logo`}
                 className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity"
                 loading="lazy"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  // Fallback to Clearbit if Logo.dev fails
-                  if (!target.src.includes('clearbit')) {
+                  if (target.src.includes('brandfetch')) {
                     target.src = `https://logo.clearbit.com/${rec.brand.domain}`;
                   } else {
-                    // Show letter fallback if both fail
                     target.style.display = "none";
                     const fallback = target.nextElementSibling as HTMLElement;
                     if (fallback) fallback.classList.remove("hidden");
@@ -167,18 +202,30 @@ export function BrandResultsGrid({ recommendations, productType }: BrandResultsG
 
             {/* Platform Quick-Links */}
             <div className="flex justify-center gap-1.5 mb-3 w-full">
-              {platforms.map((platform) => (
-                <button
-                  key={platform.id}
-                  title={`Shop on ${platform.name}`}
-                  className={cn(
-                    "p-1.5 rounded-md bg-muted/30 text-muted-foreground transition-colors min-w-[28px] min-h-[28px]",
-                    platform.color
-                  )}
-                >
-                  <PlatformIcon platform={platform.id} className="w-3.5 h-3.5" />
-                </button>
-              ))}
+              {platforms.map((platform) => {
+                const simpleSize = extractSimpleSize(rec.recommendedSize);
+                const searchUrl = platform.searchUrl(rec.brand.name, simpleSize, productType);
+
+                return (
+                  <a
+                    key={platform.id}
+                    href={searchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Shop ${rec.brand.name} on ${platform.name}`}
+                    className={cn(
+                      "p-1 rounded-md bg-white hover:bg-white/90 transition-all min-w-[28px] min-h-[28px] flex items-center justify-center hover:scale-110 shadow-sm"
+                    )}
+                  >
+                    <img
+                      src={`https://cdn.brandfetch.io/${platform.domain}`}
+                      alt={platform.name}
+                      className="w-4 h-4 object-contain"
+                      loading="lazy"
+                    />
+                  </a>
+                );
+              })}
             </div>
 
             {/* Shop Button */}
@@ -186,9 +233,16 @@ export function BrandResultsGrid({ recommendations, productType }: BrandResultsG
               variant="glass"
               size="sm"
               className="w-full text-xs h-10 opacity-80 group-hover:opacity-100 min-h-[44px]"
+              asChild
             >
-              <ShoppingCart className="h-3 w-3 mr-1" />
-              Shop Now
+              <a
+                href={platforms[0].searchUrl(rec.brand.name, extractSimpleSize(rec.recommendedSize), productType)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ShoppingCart className="h-3 w-3 mr-1" />
+                Shop Now
+              </a>
             </Button>
           </motion.div>
         ))}
