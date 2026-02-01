@@ -116,20 +116,26 @@ export function BrandResultsGrid({ recommendations, productType }: BrandResultsG
             )}
           >
             {/* Brand Logo */}
-            <div className="w-12 h-12 mb-3 flex items-center justify-center rounded-lg bg-muted/50 overflow-hidden">
+            <div className="w-14 h-14 mb-3 flex items-center justify-center rounded-xl bg-white/10 overflow-hidden p-2">
               <img
-                src={`https://logo.clearbit.com/${rec.brand.domain}`}
-                alt={rec.brand.name}
-                className="w-8 h-8 object-contain filter brightness-0 invert opacity-80 group-hover:opacity-100 transition-opacity"
+                src={`https://img.logo.dev/${rec.brand.domain}?token=pk_VAZ6-EkBTf2ZuWCPxQF8hw`}
+                alt={`${rec.brand.name} logo`}
+                className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity"
                 loading="lazy"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.style.display = "none";
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) fallback.classList.remove("hidden");
+                  // Fallback to Clearbit if Logo.dev fails
+                  if (!target.src.includes('clearbit')) {
+                    target.src = `https://logo.clearbit.com/${rec.brand.domain}`;
+                  } else {
+                    // Show letter fallback if both fail
+                    target.style.display = "none";
+                    const fallback = target.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.classList.remove("hidden");
+                  }
                 }}
               />
-              <span className="hidden text-lg font-bold text-muted-foreground">
+              <span className="hidden text-xl font-bold text-muted-foreground">
                 {rec.brand.name.charAt(0)}
               </span>
             </div>
