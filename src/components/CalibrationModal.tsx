@@ -205,6 +205,10 @@ function MethodSelection({
   );
 }
 
+// Input validation limits
+const FOOTWEAR_LIMITS = { mm: { min: 150, max: 350 }, cm: { min: 15, max: 35 }, in: { min: 5.9, max: 13.8 } };
+const APPAREL_LIMITS = { mm: { min: 711, max: 1422 }, cm: { min: 71, max: 142 }, in: { min: 28, max: 56 } };
+
 // Manual Entry Component
 function ManualEntry({
   productType,
@@ -218,9 +222,39 @@ function ManualEntry({
   isProcessing: boolean;
 }) {
   const [value, setValue] = useState("");
-  const [unit, setUnit] = useState<"cm" | "mm" | "in">("cm");
+  const [unit, setUnit] = useState<"cm" | "mm" | "in">(productType === "footwear" ? "mm" : "in");
+  const [error, setError] = useState("");
+
+  const limits = productType === "footwear" ? FOOTWEAR_LIMITS : APPAREL_LIMITS;
+  const currentLimits = limits[unit];
+
+  const handleBlur = () => {
+    if (!value) return;
+    
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) {
+      setError("Please enter a valid number");
+      return;
+    }
+
+    // Clamp value to limits
+    if (numValue < currentLimits.min) {
+      setValue(currentLimits.min.toString());
+      setError(`Minimum value is ${currentLimits.min} ${unit.toUpperCase()}`);
+    } else if (numValue > currentLimits.max) {
+      setValue(currentLimits.max.toString());
+      setError(`Maximum value is ${currentLimits.max} ${unit.toUpperCase()}`);
+    } else {
+      setError("");
+    }
+  };
 
   const handleSubmit = () => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue) || numValue < currentLimits.min || numValue > currentLimits.max) {
+      setError("Please enter a valid measurement within limits");
+      return;
+    }
     // Simulate size calculation
     const calculatedSize = productType === "footwear" ? "UK 9 / EU 43" : "M (40)";
     onComplete({ size: calculatedSize, confidence: 92 });
@@ -248,19 +282,32 @@ function ManualEntry({
           <Label className="text-sm text-muted-foreground mb-2 block">
             {productType === "footwear" ? "Foot Length" : "Chest/Bust Measurement"}
           </Label>
+          <p className="text-xs text-muted-foreground/70 mb-2">
+            Range: {currentLimits.min} - {currentLimits.max} {unit.toUpperCase()}
+          </p>
           <div className="flex gap-2">
-            <Input
-              type="number"
-              placeholder="Enter value"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="flex-1 bg-muted/50 border-border/50 focus:border-primary"
-            />
+            <div className="flex-1 space-y-1">
+              <Input
+                type="number"
+                placeholder={`${currentLimits.min} - ${currentLimits.max}`}
+                value={value}
+                onChange={(e) => { setValue(e.target.value); setError(""); }}
+                onBlur={handleBlur}
+                min={currentLimits.min}
+                max={currentLimits.max}
+                step={unit === "in" ? 0.1 : 1}
+                className={cn(
+                  "bg-muted/50 border-border/50 focus:border-primary",
+                  error && "border-destructive focus:border-destructive"
+                )}
+              />
+              {error && <p className="text-xs text-destructive">{error}</p>}
+            </div>
             <div className="flex rounded-lg border border-border/50 overflow-hidden">
               {(["cm", "mm", "in"] as const).map((u) => (
                 <button
                   key={u}
-                  onClick={() => setUnit(u)}
+                  onClick={() => { setUnit(u); setValue(""); setError(""); }}
                   className={cn(
                     "px-3 py-2 text-sm font-medium transition-colors",
                     unit === u
@@ -279,7 +326,7 @@ function ManualEntry({
 
         <Button
           onClick={handleSubmit}
-          disabled={!value || isProcessing}
+          disabled={!value || isProcessing || !!error}
           className="w-full"
           variant={isCyan ? "hero" : "heroSecondary"}
         >
